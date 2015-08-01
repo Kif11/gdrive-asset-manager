@@ -75,8 +75,34 @@ def get_file(service, name):
     files = service.files().list(q="title contains '%s'" % name).execute()['items'][0]
     return files
 
+
+def get_path(service, file, path_items=[]):
+
+    '''
+    Construct a path to a drive file recursively asking for file parent
+    '''
+    # def parent_title(service, file, path_items=[])
+    parent = file['parents'][0]
+    parent_file = service.files().get(fileId=parent['id']).execute()
+    title = parent_file['title']
+
+    while title != 'My Drive':
+        path_items.append(title)
+        parent = parent_file['parents'][0]
+        parent_file = service.files().get(fileId=parent['id']).execute()
+        title = parent_file['title']
+
+    path_items.reverse()
+    # import pdb; pdb.set_trace()
+    path = ''
+    for i in path_items:
+        path += '/' + i
+    return path
+
+
 def upload_file(service, title, description, mime_type, parent_id, path):
-  """Insert new file.
+  '''
+  Insert new file.
 
   Args:
     service: Drive API service instance.
@@ -87,9 +113,11 @@ def upload_file(service, title, description, mime_type, parent_id, path):
     path: Path of the file to insert.
   Returns:
     Inserted file metadata if successful, None otherwise.
-  """
+  '''
 
   media = MediaFileUpload(path, mime_type, resumable=True)
+
+  # TODO: Need to add human user
   body = {
     'title': title,
     'description': description,
@@ -117,7 +145,8 @@ def upload_file(service, title, description, mime_type, parent_id, path):
     print 'An error occured: %s' % error
     return None
 
-def upload_sequence(folder, parent):
+
+def upload_sequence(service, folder, parent):
     '''
     Upload files one by one in specifed folder
     '''
@@ -126,7 +155,7 @@ def upload_sequence(folder, parent):
     for f in files:
         root, name = folder, f
 
-        upload_file(service=d,
+        upload_file(service=service,
                   title=name,
                   description='',
                   mime_type='',
@@ -134,12 +163,60 @@ def upload_sequence(folder, parent):
                   path=os.path.join(root, name))
 
 
+def download_file(service, file, destination):
+    drive_root = get_path(service, file)
+    drive_path = os.path.join(drive_root, file['title'])
+    local_path = os.path.join(destination, file['title'])
+
+    request = service.files().get_media(fileId=file['id'])
+    fh = io.FileIO(local_path, mode='wb')
+    media_request = apiclient.http.MediaIoBaseDownload(fh, request)
+
+    print 'Downloading %s to %s' % (drive_path, local_path)
+
+    pbar = ProgressBar(maxval=100).start()
+    while True:
+        try:
+          download_progress, done = media_request.next_chunk()
+        except errors.HttpError, error:
+          print 'An error occurred: %s' % error
+          return
+        if download_progress:
+            pbar.update(int(download_progress.progress() * 100))
+        if done:
+          print 'Download Complete'
+          return
+
+
+def list_files(service, folder):
+    files = d.files().list(
+            q="'%s' in parents and trashed = false" % folder['id']
+            ).execute()['items']
+    return files
+
+
+def download_sequence(service, folder, destination):
+
+    files = list_files(service, folder)
+
+    for f in files:
+        download_file(service, f, destination)
+
+    print 'All files are downloaded'
+    return files
+
 d = get_instance()
 
 if __name__ == '__main__':
     # cp_project_dir = get_file(d, 'CpProject')
     seq_dir = get_file(d, 'SQ05_SH16_01')
-    upload_sequence('/Users/admin/Desktop/CurpigeonTest/img/SQ05_SH16', seq_dir['id'])
+    download_sequence(d, seq_dir, '/Users/admin/Desktop/SQ')
+    # single_dpx = get_file(d, 'SQ05_SQ16_0001.dpx')
+    # download_file(d, single_dpx, '/Users/admin/Desktop/')
+    # print get_path(d, seq_dir)
+
+    # seq_dir = get_file(d, 'SQ05_SH16_01')
+    # upload_sequence('/Users/admin/Desktop/CurpigeonTest/img/SQ05_SH16', seq_dir['id'])
     # print cp_project_dir['id']
     # list_files(drive, 'TestProject')
     # print upload_file(service=d,
