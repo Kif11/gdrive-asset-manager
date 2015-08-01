@@ -117,7 +117,6 @@ def upload_file(service, title, description, mime_type, parent_id, path):
 
   media = MediaFileUpload(path, mime_type, resumable=True)
 
-  # TODO: Need to add human user
   body = {
     'title': title,
     'description': description,

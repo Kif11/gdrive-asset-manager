@@ -55,37 +55,35 @@ class Project(object):
                             display_name="Test Nuke Scene")
         print result
 
-    def publish(self, shot, path):
-
-        service = get_instance()
-
-        cp_project_dir = drive.get_file(service, 'CpProject')
-        file_root, file_name = os.path.split(path)
-
-        drive_file = drive.upload_file(service=service,
-                          title=file_name,
-                          description='This is a test upload',
-                          mime_type='',
-                          parent_id=cp_project_dir['id'],
-                          path=path)
+    def publish(self, drive_file, sg_shot, version=1, user_id=1201, type_id=8):
+        '''
+        type_id: 8 - Nuke Script, 9 - Rendered Image
+        '''
 
         data = {
             'project': {'type':'Project', 'id':self.id},
-            'entity': {'type':'Shot', 'id': shot['id']},
-            'code': file_name,
-            'path_cache': drive_file['webContentLink'],
-            'description': 'Test published file'
+            'entity': {'type':'Shot', 'id': sg_shot['id']},
+            'code': drive_file['title'],
+            'path_cache': drive_file['alternateLink'],
+            'sg_drive_id': drive_file['id'],
+            'version_number': version,
+            'published_file_type': {'type':'PublishedFileType', 'id':type_id},
+            'description': 'Test published file',
+            'created_by': {'type':'HumanUser','id':user_id},
             }
-        publishe = sg.create("PublishedFile", data)
-        pprint(publishe)
 
+        publish = sg.create("PublishedFile", data)
+        pprint(publish)
 
 
 curpigeon = Project(id=147)
+d = drive.get_instance()
 
-# curpigeon.list_shots()
-shot = curpigeon.get_shot('SQ05_SH16')
+drive_seq_dir = drive.get_file(d, 'SQ05_SH16_01')
+sg_shot = curpigeon.get_shot('SQ05_SH16')
+
+# pprint(drive_seq_dir)
 # print shot
 # curpigeon.list_versions(shot)
 # curpigeon.upload_nuke(shot, '/Users/admin/Desktop/SQ05_SH16_5_KIR.nk')
-curpigeon.publish(shot, '/Users/admin/Desktop/SQ05_SH16_5_KIR.nk')
+curpigeon.publish(drive_file=drive_seq_dir, sg_shot=sg_shot, version=2,  type_id=9)
