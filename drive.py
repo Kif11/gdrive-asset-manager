@@ -13,6 +13,7 @@ from apiclient.http import MediaFileUpload
 
 from pprint import pprint
 from progressbar import ProgressBar
+import simplejson
 
 SCOPES = 'https://www.googleapis.com/auth/drive'
 CLIENT_SECRET_FILE = 'client_secrets.json'
@@ -24,7 +25,6 @@ try:
     flags = argparse.ArgumentParser(parents=[tools.argparser]).parse_args()
 except ImportError:
     flags = None
-
 
 def get_credentials():
     '''
@@ -72,11 +72,14 @@ def get_file(service, name):
     '''
     Find latest file that match the name
     '''
-    files = service.files().list(q="title contains '%s'" % name).execute()['items'][0]
-    return files
+    files = service.files().list(q="title = '%s'" % name).execute()['items']
+    if len(files) == 1:
+        return files[0]
+    else:
+        print '%d files have "%s" name' % (len(files), name)
+        return
 
-
-def get_path(service, file, path_items=[]):
+def get_path(service, file):
 
     '''
     Construct a path to a drive file recursively asking for file parent
@@ -86,6 +89,7 @@ def get_path(service, file, path_items=[]):
     parent_file = service.files().get(fileId=parent['id']).execute()
     title = parent_file['title']
 
+    path_items = []
     while title != 'My Drive':
         path_items.append(title)
         parent = parent_file['parents'][0]
@@ -94,11 +98,10 @@ def get_path(service, file, path_items=[]):
 
     path_items.reverse()
     # import pdb; pdb.set_trace()
-    path = ''
+    path = '/My Drive'
     for i in path_items:
         path += '/' + i
     return path
-
 
 def upload_file(service, title, parent_id, path, description='', mime_type=''):
   '''
@@ -144,8 +147,7 @@ def upload_file(service, title, parent_id, path, description='', mime_type=''):
     print 'An error occured: %s' % error
     return None
 
-
-def upload_sequence(service, folder, parent):
+def upload_sequence(service, folder, parent_id):
     '''
     Upload files one by one in specifed folder
     '''
@@ -158,9 +160,8 @@ def upload_sequence(service, folder, parent):
                   title=name,
                   description='',
                   mime_type='',
-                  parent_id=parent,
+                  parent_id=parent_id,
                   path=os.path.join(root, name))
-
 
 def download_file(service, file, destination):
     drive_root = get_path(service, file)
@@ -186,13 +187,11 @@ def download_file(service, file, destination):
           print 'Download Complete'
           return
 
-
 def list_files(service, folder):
     files = d.files().list(
             q="'%s' in parents and trashed = false" % folder['id']
             ).execute()['items']
     return files
-
 
 def download_sequence(service, folder, destination):
 
@@ -223,21 +222,61 @@ def insert_property(service, file_id, key, value, visibility):
     print 'An error occurred: %s' % error
   return None
 
-def upload_nuke(service, title, parent_id, path):
+def file_from_path(service, path):
 
-    upload_file(service, title, parent_id, path)
-    upload_sequence(service, folder, parent)
-    insert_property(service, file_id, key, value, visibility)
+    root, name = os.path.split(path)
+
+    print root, name
+
+    files = service.files().list(q="title contains '%s'" % name).execute()['items']
+
+    for f in files:
+        print f['title']
+        if path == get_path(service, f):
+            print 'Find match'
+
+def upload_nuke(service, nuke_scene):
+
+    nuke_scene_dir_id = '0By7scHVmOMWFfl9kTkdRbnFlTTd0UGpIeHNERmozaDVOZXpHckdUazZuQldCZEVKSzQ5SGc'
+    seq_dir_id = '0By7scHVmOMWFfkV4bkQ4emdSMDhwQ0RZR01acXI1Y3Q2X2V0UHl0c0FEMjZTaC1kenlEaWM'
+
+    nuke_root, nuke_name = os.path.split(nuke_scene)
+
+    # Read nuke dependency file
+    with open(os.path.join(nuke_root, '.dependencies'), 'rb') as f:
+        dependencies = simplejson.load(f)
+
+    # Upload thouse dependencies
+    for path in dependencies:
+        root, name = os.path.split(path)
+        upload_sequence(service=service,
+                        folder=root,
+                        parent_id=seq_dir_id)
+
+
+    # Upload the nuke file to drive
+    upload_file(service=service,
+                path=nuke_scene,
+                title=nuke_name,
+                parent_id=nuke_scene_dir_id)
+
+    # Set nuke file properties to reflect this dependencies
+    # insert_property(service, file_id, key, value, visibility)
 
 d = get_instance()
 
 if __name__ == '__main__':
+
+    # upload_nuke(d, '/Users/admin/Desktop/CurpigeonTest/SQ05_SH16_01_KIR.nk')
+
+    print get_file(d, 'SQ05_SH16_01')
+
+    # file_from_path(d, '/My Drive/CpProject/Scenes/SQ05/SH16/maya')
+
     # cp_project_dir = get_file(d, 'CpProject')
-    seq_dir = get_file(d, 'SQ05_SH16_01')
-    single_dpx = get_file(d, 'SQ05_SQ16_0001.dpx')
-
-    pprint(seq_dir)
-
+    # seq_dir = get_file(d, 'SQ05_SH16_01')
+    # single_dpx = get_file(d, 'SQ05_SQ16_0001.dpx')
+    #
     # insert_property(d, seq_dir['id'], 'linked_file_id', single_dpx['id'], 'PUBLIC')
     # download_sequence(d, seq_dir, '/Users/admin/Desktop/SQ')
 
