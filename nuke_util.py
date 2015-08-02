@@ -5,9 +5,8 @@ import drive
 from drive import d
 
 reload(drive)
-meta_file = os.path.join(nuke.script_directory(), '.dependencies')
 
-def create_meta():
+def nuke_meta():
     # Collect all external paths
     external_paths = []
     for node in nuke.allNodes('Read'):
@@ -24,30 +23,28 @@ def create_meta():
             'dependencies': external_paths
            }
 
-    # Write meta data to a file
-    with open(meta_file, 'wb') as f:
-        simplejson.dump(meta_data, f)
-
     return meta_data
 
 def publish():
 
-    # Reading meta data file
-    with open(meta_file, 'rb') as f:
-        meta_data = simplejson.load(f)
-
-    meta_data = create_meta()
+    parent_id='0By7scHVmOMWFfmFUTUZlTkJ4MzNwUEZpNkJMalFGWVlJUm56bEVPdUpzWDFfSTN5VVlnVnc'
+    meta_data = nuke_meta()
     service = d
 
-    # TODO: Need to check file by id instead of name
-    drive_file = drive.get_file(service, meta_data['name'])
-
+    # Find if file with scene name already on Drive
+    # If soo update file revision instead of creating a new one
+    drive_file = drive.get_file(service, name=meta_data['name'],
+                                         parent_id=parent_id)
     if drive_file:
-        drive.update_file(service, drive_file['id'], meta_data['path'], new_revision=True)
+        drive.update_file(service, file_id=drive_file['id'],
+                                   path=meta_data['path'],
+                                   new_revision=True)
     else:
-        uploaded_file = drive.upload_file(service, meta_data['path'])
+        drive.upload_file(service, path=meta_data['path'],
+                                   parent_id=parent_id)
 
-        meta_data['drive_id'] = uploaded_file['id']
-        # Write meta data to a file
-        with open(meta_file, 'wb') as f:
-            simplejson.dump(meta_data, f)
+
+    # Upload sequences that use by this nuke file
+    for path in meta_data['dependencies']:
+        root, name = os.path.split(path)
+        drive.upload_sequence(service, root, parent_id)

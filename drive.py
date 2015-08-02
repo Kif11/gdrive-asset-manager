@@ -38,7 +38,6 @@ def get_credentials():
     '''
     home_dir = os.path.expanduser('~')
     credential_dir = os.path.dirname(os.path.realpath(__file__))
-    print credential_dir
     if not os.path.exists(credential_dir):
         os.makedirs(credential_dir)
 
@@ -69,11 +68,16 @@ def get_instance():
     drive = discovery.build('drive', 'v2', http=http)
     return drive
 
-def get_file(service, name):
+def get_file(service, name, parent_id=None):
     '''
     Find latest file that match the name. Not looking in trashed
     '''
-    files = service.files().list(q="title = '%s' and trashed = false" % name).execute()['items']
+
+    if parent_id:
+        files = service.files().list(q="title = '%s' and trashed = false and '%s' in parents" % (name, parent_id)).execute()['items']
+    else:
+        files = service.files().list(q="title = '%s' and trashed = false" % name).execute()['items']
+
     if files:
         if len(files) == 1:
             print files
@@ -156,17 +160,21 @@ def upload_sequence(service, folder, parent_id):
     '''
     Upload files one by one in specifed folder
     '''
+    folder_root, folder_name = os.path.split(folder)
     files = os.listdir(folder)
+
+    # Create parent sequence directory
+    body = {'title': folder_name,
+            'mimeType': 'application/vnd.google-apps.folder',
+            'parents': [{'id': parent_id}]}
+    drive_sq_root = d.files().insert(body=body).execute()
 
     for f in files:
         root, name = folder, f
 
         upload_file(service=service,
-                  title=name,
-                  description='',
-                  mime_type='',
-                  parent_id=parent_id,
-                  path=os.path.join(root, name))
+                    path=os.path.join(root, name),
+                    parent_id=drive_sq_root['id'])
 
 def download_file(service, file, destination):
     drive_root = get_path(service, file)
@@ -295,15 +303,16 @@ def upload_nuke(service, nuke_scene):
 d = get_instance()
 
 if __name__ == '__main__':
+    pass
 
     # upload_nuke(d, '/Users/admin/Desktop/CurpigeonTest/SQ05_SH16_01_KIR.nk')
 
-    nuke_file = get_file(d, 'TestRevision.nk')
-
-    update_file(service=d,
-                file_id=nuke_file['id'],
-                path='/Users/admin/Desktop/CurpigeonTest/TestRevision.nk',
-                new_revision=True)
+    # nuke_file = get_file(d, 'TestRevision.nk')
+    #
+    # update_file(service=d,
+    #             file_id=nuke_file['id'],
+    #             path='/Users/admin/Desktop/CurpigeonTest/TestRevision.nk',
+    #             new_revision=True)
 
     # d.files().list(q="title='nuke and childrens has '")
 
