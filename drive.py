@@ -204,13 +204,37 @@ def download_sequence(service, folder, destination):
     print 'All files are downloaded'
     return files
 
+def insert_property(service, file_id, key, value, visibility):
+  """
+  Insert new custom file property.
+
+  """
+  body = {
+    'key': key,
+    'value': value,
+    'visibility': visibility
+  }
+
+  try:
+    p = service.properties().insert(
+        fileId=file_id, body=body).execute()
+    return p
+  except errors.HttpError, error:
+    print 'An error occurred: %s' % error
+  return None
+
 d = get_instance()
 
 if __name__ == '__main__':
     # cp_project_dir = get_file(d, 'CpProject')
     seq_dir = get_file(d, 'SQ05_SH16_01')
-    download_sequence(d, seq_dir, '/Users/admin/Desktop/SQ')
-    # single_dpx = get_file(d, 'SQ05_SQ16_0001.dpx')
+    single_dpx = get_file(d, 'SQ05_SQ16_0001.dpx')
+
+    pprint(seq_dir)
+
+    # insert_property(d, seq_dir['id'], 'linked_file_id', single_dpx['id'], 'PUBLIC')
+    # download_sequence(d, seq_dir, '/Users/admin/Desktop/SQ')
+
     # download_file(d, single_dpx, '/Users/admin/Desktop/')
     # print get_path(d, seq_dir)
 

@@ -64,7 +64,7 @@ class Project(object):
             'project': {'type':'Project', 'id':self.id},
             'entity': {'type':'Shot', 'id': sg_shot['id']},
             'code': drive_file['title'],
-            'path_cache': drive_file['alternateLink'],
+            # 'path_cache': drive_file['alternateLink'], # Not necessary since url can be constructed from id
             'sg_drive_id': drive_file['id'],
             'version_number': version,
             'published_file_type': {'type':'PublishedFileType', 'id':type_id},
