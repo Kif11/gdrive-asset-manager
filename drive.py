@@ -100,7 +100,7 @@ def get_path(service, file, path_items=[]):
     return path
 
 
-def upload_file(service, title, description, mime_type, parent_id, path):
+def upload_file(service, title, parent_id, path, description='', mime_type=''):
   '''
   Insert new file.
 
@@ -222,6 +222,12 @@ def insert_property(service, file_id, key, value, visibility):
   except errors.HttpError, error:
     print 'An error occurred: %s' % error
   return None
+
+def upload_nuke(service, title, parent_id, path):
+
+    upload_file(service, title, parent_id, path)
+    upload_sequence(service, folder, parent)
+    insert_property(service, file_id, key, value, visibility)
 
 d = get_instance()
 
