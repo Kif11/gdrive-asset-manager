@@ -70,9 +70,9 @@ def get_instance():
 
 def get_file(service, name):
     '''
-    Find latest file that match the name
+    Find latest file that match the name. Not looking in trashed
     '''
-    files = service.files().list(q="title = '%s'" % name).execute()['items']
+    files = service.files().list(q="title = '%s' and trashed = false" % name).execute()['items']
     if len(files) == 1:
         return files[0]
     else:
@@ -203,6 +203,43 @@ def download_sequence(service, folder, destination):
     print 'All files are downloaded'
     return files
 
+def update_file(service, file_id, path, new_revision):
+  '''
+  Update an existing file's metadata and content.
+
+  Args:
+    service: Drive API service instance.
+    file_id: ID of the file to update.
+    path: Filename of the new content to upload.
+    new_revision: Whether or not to create a new revision for this file.
+  Returns:
+    Updated file metadata if successful, None otherwise.
+  '''
+
+  root, name = os.path.split(path)
+
+  try:
+    # First retrieve the file from the API.
+    file = service.files().get(fileId=file_id).execute()
+
+    # File's new metadata.
+    file['title'] = name
+
+    # File's new content.
+    media_body = MediaFileUpload(
+        path, mimetype='', resumable=True)
+
+    # Send the request to the API.
+    updated_file = service.files().update(
+        fileId=file_id,
+        body=file,
+        newRevision=new_revision,
+        media_body=media_body).execute()
+    return updated_file
+  except errors.HttpError, error:
+    print 'An error occurred: %s' % error
+    return None
+
 def insert_property(service, file_id, key, value, visibility):
   """
   Insert new custom file property.
@@ -269,7 +306,14 @@ if __name__ == '__main__':
 
     # upload_nuke(d, '/Users/admin/Desktop/CurpigeonTest/SQ05_SH16_01_KIR.nk')
 
-    print get_file(d, 'SQ05_SH16_01')
+    nuke_file = get_file(d, 'TestRevision.nk')
+
+    update_file(service=d,
+                file_id=nuke_file['id'],
+                path='/Users/admin/Desktop/CurpigeonTest/TestRevision.nk',
+                new_revision=True)
+
+    # d.files().list(q="title='nuke and childrens has '")
 
     # file_from_path(d, '/My Drive/CpProject/Scenes/SQ05/SH16/maya')
 
