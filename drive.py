@@ -19,7 +19,7 @@ SCOPES = 'https://www.googleapis.com/auth/drive'
 CLIENT_SECRET_FILE = 'client_secrets.json'
 APPLICATION_NAME = 'Drive API Quickstart'
 
-# TODO{kirill}: Fiure out what's going on here?
+# TODO{kirill}: Figure out what's going on here?
 try:
     import argparse
     flags = argparse.ArgumentParser(parents=[tools.argparser]).parse_args()
@@ -37,7 +37,8 @@ def get_credentials():
         Credentials, the obtained credential.
     '''
     home_dir = os.path.expanduser('~')
-    credential_dir = os.getcwd()
+    credential_dir = os.path.dirname(os.path.realpath(__file__))
+    print credential_dir
     if not os.path.exists(credential_dir):
         os.makedirs(credential_dir)
 
@@ -49,7 +50,7 @@ def get_credentials():
     credentials = store.get()
     # If faled to retrive token from file create a new one
     if not credentials or credentials.invalid:
-        flow = client.flow_from_clientsecrets(CLIENT_SECRET_FILE, SCOPES)
+        flow = client.flow_from_clientsecrets(os.path.join(credential_dir, CLIENT_SECRET_FILE), SCOPES)
         # flow.user_agent = APPLICATION_NAME # Why do we need application name?
         if flags:
             credentials = tools.run_flow(flow, store, flags)
@@ -73,10 +74,15 @@ def get_file(service, name):
     Find latest file that match the name. Not looking in trashed
     '''
     files = service.files().list(q="title = '%s' and trashed = false" % name).execute()['items']
-    if len(files) == 1:
-        return files[0]
+    if files:
+        if len(files) == 1:
+            print files
+            return files[0]
+        else:
+            print '%d files have "%s" name' % (len(files), name)
+            return
     else:
-        print '%d files have "%s" name' % (len(files), name)
+        print 'Nothing found matching "%s"' % name
         return
 
 def get_path(service, file):
@@ -103,7 +109,7 @@ def get_path(service, file):
         path += '/' + i
     return path
 
-def upload_file(service, title, parent_id, path, description='', mime_type=''):
+def upload_file(service, path, parent_id=None):
   '''
   Insert new file.
 
@@ -117,12 +123,12 @@ def upload_file(service, title, parent_id, path, description='', mime_type=''):
   Returns:
     Inserted file metadata if successful, None otherwise.
   '''
+  root, name = os.path.split(path)
 
-  media = MediaFileUpload(path, mime_type, resumable=True)
+  media = MediaFileUpload(path, '', resumable=True)
 
   body = {
-    'title': title,
-    'description': description,
+    'title': name
   }
   # Set the parent folder.
   if parent_id:
@@ -137,12 +143,11 @@ def upload_file(service, title, parent_id, path, description='', mime_type=''):
     while response is None:
       status, response = request.next_chunk()
       if status:
-        # print "Uploaded %d%%." % int(status.progress() * 100)
         # Update progress bar
         # TODO(kirill): Check if this progress bar works on Windows
         pbar.update(int(status.progress() * 100))
     print "Upload Complete!"
-    return file
+    return request.execute()
   except errors.HttpError, error:
     print 'An error occured: %s' % error
     return None
@@ -258,19 +263,6 @@ def insert_property(service, file_id, key, value, visibility):
   except errors.HttpError, error:
     print 'An error occurred: %s' % error
   return None
-
-def file_from_path(service, path):
-
-    root, name = os.path.split(path)
-
-    print root, name
-
-    files = service.files().list(q="title contains '%s'" % name).execute()['items']
-
-    for f in files:
-        print f['title']
-        if path == get_path(service, f):
-            print 'Find match'
 
 def upload_nuke(service, nuke_scene):
 
