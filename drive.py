@@ -148,7 +148,6 @@ def upload_file(service, path, parent_id=None):
       status, response = request.next_chunk()
       if status:
         # Update progress bar
-        # TODO(kirill): Check if this progress bar works on Windows
         pbar.update(int(status.progress() * 100))
     print "Upload Complete!"
     return request.execute()
