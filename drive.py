@@ -303,38 +303,4 @@ def upload_nuke(service, nuke_scene):
 d = get_instance()
 
 if __name__ == '__main__':
-    pass
-
-    # upload_nuke(d, '/Users/admin/Desktop/CurpigeonTest/SQ05_SH16_01_KIR.nk')
-
-    # nuke_file = get_file(d, 'TestRevision.nk')
-    #
-    # update_file(service=d,
-    #             file_id=nuke_file['id'],
-    #             path='/Users/admin/Desktop/CurpigeonTest/TestRevision.nk',
-    #             new_revision=True)
-
-    # d.files().list(q="title='nuke and childrens has '")
-
-    # file_from_path(d, '/My Drive/CpProject/Scenes/SQ05/SH16/maya')
-
-    # cp_project_dir = get_file(d, 'CpProject')
-    # seq_dir = get_file(d, 'SQ05_SH16_01')
-    # single_dpx = get_file(d, 'SQ05_SQ16_0001.dpx')
-    #
-    # insert_property(d, seq_dir['id'], 'linked_file_id', single_dpx['id'], 'PUBLIC')
-    # download_sequence(d, seq_dir, '/Users/admin/Desktop/SQ')
-
-    # download_file(d, single_dpx, '/Users/admin/Desktop/')
-    # print get_path(d, seq_dir)
-
-    # seq_dir = get_file(d, 'SQ05_SH16_01')
-    # upload_sequence('/Users/admin/Desktop/CurpigeonTest/img/SQ05_SH16', seq_dir['id'])
-    # print cp_project_dir['id']
-    # list_files(drive, 'TestProject')
-    # print upload_file(service=d,
-    #                   title='SQ05_SH16_5_KIR.nk',
-    #                   description='This is a test upload',
-    #                   mime_type='',
-    #                   parent_id=cp_project_dir['id'],
-    #                   path='/Users/admin/Desktop/CurpigeonTest/img/SQ05_SH16/SQ05_SQ16_0002.dpx')
+    upload_file(d, 'C:/Users/curpigeon/Desktop/kk_drive/Big_Pine_landscape.jpg')
