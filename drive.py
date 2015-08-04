@@ -17,7 +17,7 @@ import simplejson
 
 SCOPES = 'https://www.googleapis.com/auth/drive'
 CLIENT_SECRET_FILE = 'client_secrets.json'
-APPLICATION_NAME = 'Drive API Quickstart'
+TOKEN_FILE = 'token.json'
 
 # TODO{kirill}: Figure out what's going on here?
 try:
@@ -26,47 +26,59 @@ try:
 except ImportError:
     flags = None
 
-def get_credentials():
-    '''
-    Gets valid user credentials from storage.
 
-    If nothing has been stored, or if the stored credentials are invalid,
-    the OAuth2 flow is completed to obtain the new credentials.
+class DriveService(object):
 
-    Returns:
-        Credentials, the obtained credential.
-    '''
-    home_dir = os.path.expanduser('~')
-    credential_dir = os.path.dirname(os.path.realpath(__file__))
-    if not os.path.exists(credential_dir):
-        os.makedirs(credential_dir)
+    def __new__(cls):
+        inst = object.__new__(cls)
+        return inst
 
-    # Path to credentil file that store an user token
-    credential_path = os.path.join(credential_dir,
-                                   'token.json')
-    # Save token
-    store = oauth2client.file.Storage(credential_path)
-    credentials = store.get()
-    # If faled to retrive token from file create a new one
-    if not credentials or credentials.invalid:
-        flow = client.flow_from_clientsecrets(os.path.join(credential_dir, CLIENT_SECRET_FILE), SCOPES)
-        # flow.user_agent = APPLICATION_NAME # Why do we need application name?
-        if flags:
-            credentials = tools.run_flow(flow, store, flags)
-        else: # Needed only for compatability with Python 2.6
-            credentials = tools.run(flow, store)
-        print 'Storing credentials to ' + credential_path
-    return credentials
+    def _get_credentials(self):
+        '''
+        Gets valid user credentials from storage.
 
-def get_instance():
-    '''
-    Returns:
-        Authenticated instance of Google Drive API
-    '''
-    credentials = get_credentials()
-    http = credentials.authorize(httplib2.Http())
-    drive = discovery.build('drive', 'v2', http=http)
-    return drive
+        If nothing has been stored, or if the stored credentials are invalid,
+        the OAuth2 flow is completed to obtain the new credentials.
+
+        Returns:
+            Credentials, the obtained credential.
+        '''
+        home_dir = os.path.expanduser('~')
+        credential_dir = os.path.dirname(os.path.realpath(__file__))
+
+        if not os.path.exists(credential_dir):
+            os.makedirs(credential_dir)
+
+        # Path to credentil file that store an user token
+        credential_path = os.path.join(credential_dir, TOKEN_FILE)
+
+        # Save token
+        store = oauth2client.file.Storage(credential_path)
+        credentials = store.get()
+
+        # If faled to retrive token from file create a new one
+        if not credentials or credentials.invalid:
+            flow = client.flow_from_clientsecrets(os.path.join(credential_dir, CLIENT_SECRET_FILE), SCOPES)
+            if flags:
+                credentials = tools.run_flow(flow, store, flags)
+            else: # Needed only for compatability with Python 2.6
+                credentials = tools.run(flow, store)
+            print 'Storing credentials to ' + credential_path
+
+        return credentials
+
+    def _authenticate(self):
+        '''
+        Returns:
+            Authenticated instance of Google Drive API
+        '''
+        credentials = self._get_credentials()
+        http = credentials.authorize(httplib2.Http())
+        service = discovery.build('drive', 'v2', http=http)
+
+        return service
+
+
 
 def get_file(service, name, parent_id=None):
     '''
@@ -299,7 +311,8 @@ def upload_nuke(service, nuke_scene):
     # Set nuke file properties to reflect this dependencies
     # insert_property(service, file_id, key, value, visibility)
 
-d = get_instance()
 
 if __name__ == '__main__':
-    upload_file(d, 'C:/Users/curpigeon/Desktop/kk_drive/Big_Pine_landscape.jpg')
+    service = DriveService()
+    print dir(service)
+    # print service.files().list(q="title = 'CpTestProject'").execute()['items']
