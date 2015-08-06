@@ -1,5 +1,5 @@
 @echo off
-set VIRTUAL_ENV=C:\Users\curpigeon\Desktop\kk_drive\venv
+set VIRTUAL_ENV=G:\Code\kk_drive\venv
 
 if not defined PROMPT (
     set PROMPT=$P$G

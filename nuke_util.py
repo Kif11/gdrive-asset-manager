@@ -1,59 +1,47 @@
 import os
 import simplejson
 import nuke
+from pathlib import Path
+
 import drive
-from drive import d
-
 reload(drive)
+from drive import LocalFile, DriveFile, DriveUtils
 
-nuke_drive_location = {}
+class NukeLocalFile(object):
+    def __init__(self):
+        self.path = self._get_path()
+        self.name = self.path.name
+        self.nuke_scene = LocalFile(self.path)
+        self.dependencies = self._get_dependencies()
+        self.drive_id = None
+        self.drive_file = None
+        self.drive_scenes_location = '0By7scHVmOMWFflNFb3BXWWZFQmdwMmtpU3J0WE5nUmF6X2JqT2J0X3NYck1XZGlfWV8ybmc'
+        self.drive_elements_location = '0By7scHVmOMWFfkdjUXFiX3JZZnNHcVFEUktZU0tSWk1kLXFiUmRNckEyMngwM0Z1cENFdWM'
 
-def nuke_meta():
-    # Collect all external paths
-    external_paths = []
-    for node in nuke.allNodes('Read'):
-        external_paths.append(node.knob('file').value())
+    def _get_dependencies(self):
+        # Collect all external paths
+        external_paths = []
+        for node in nuke.allNodes('Read'):
+            external_paths.append(node.knob('file').value())
+        return external_paths
 
-    nuke_scene = nuke.root().knob('name').value()
-    root, name = os.path.split(nuke_scene)
+    def _get_path(self):
+        return Path(nuke.root().knob('name').value())
 
-    # Cunstruct meta data object
-    meta_data = {
-            'name': name,
-            'type': 'Nuke Script',
-            'path': nuke_scene,
-            'dependencies': external_paths
-           }
+    def publish(self):
 
-    return meta_data
+        drive_nuke = DriveUtils().get_file(self.name, parent_id=self.drive_scenes_location)
 
-def publish():
+        if not drive_nuke:
+            self.nuke_scene.upload(self.drive_scenes_location)
+        else:
+            print 'Update file here'
 
-    parent_id='0By7scHVmOMWFfmFUTUZlTkJ4MzNwUEZpNkJMalFGWVlJUm56bEVPdUpzWDFfSTN5VVlnVnc'
-    meta_data = nuke_meta()
-    service = d
+        # for f in self.dependencies:
+        #     path = Path(f)
+        #     folder = LocalFile(path.parent)
+        #     folder.upload(self.drive_elements_location)
 
-    # Find if file with scene name already on Drive
-    # If soo update file revision instead of creating a new one
-    drive_file = drive.get_file(service, name=meta_data['name'],
-                                         parent_id=parent_id)
-    # If file already exist create his revision
-    if drive_file:
-        drive.update_file(service, file_id=drive_file['id'],
-                                   path=meta_data['path'],
-                                   new_revision=True)
-    # Upload nuke file to drive
-    else:
-        drive.upload_file(service, path=meta_data['path'],
-                                   parent_id=parent_id)
-
-
-
-
-    # Upload sequences that use by this nuke file
-    for path in meta_data['dependencies']:
-        root, name = os.path.split(path)
-        drive.upload_sequence(service, root, parent_id)
 
 def embed_id(id):
     '''

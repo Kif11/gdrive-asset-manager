@@ -77,30 +77,6 @@ class DriveService(object):
 
         return service
 
-class DriveUtils(object):
-    def __init__(self):
-        self.service = DriveService().authenticate()
-
-    def get_file(self, name, parent_id=None):
-        '''
-        Find latest file that match the name. Not looking in trashed
-        '''
-
-        if parent_id:
-            files = self.service.files().list(q="title = '%s' and trashed = false and '%s' in parents" % (name, parent_id)).execute()['items']
-        else:
-            files = self.service.files().list(q="title = '%s' and trashed = false" % name).execute()['items']
-
-        if files:
-            if len(files) == 1:
-                return files[0]
-            else:
-                print '%d files have "%s" name' % (len(files), name)
-                return
-        else:
-            print 'Nothing found matching "%s"' % name
-            return
-
 class DriveFile(DriveService):
     def __init__(self, id):
         super(self.__class__, self).__init__()
@@ -109,6 +85,11 @@ class DriveFile(DriveService):
 
     def _file(self):
         return self.service.files().get(fileId=self.id).execute()
+
+    def _parent(self, drive_file):
+        parent_id = drive_file['parents'][0]['id']
+        parent = self.service.files().get(fileId=parent_id).execute()
+        return parent
 
     def _list_files(self, drive_file):
         files = self.service.files().list(
@@ -137,11 +118,29 @@ class DriveFile(DriveService):
               print 'Download Complete'
               return
 
+    def file_in_folder(self, name, parent_id):
+        '''
+        Find latest file that match the name. Not looking in trashed
+        '''
+        files = self.service.files().list(q="title = '%s' and trashed = false and '%s' in parents" % (name, parent_id)).execute()['items']
+
+        if files:
+            if len(files) == 1:
+                return files[0]
+            else:
+                print '%d files have "%s" name' % (len(files), name)
+                return
+        else:
+            print 'Nothing found matching "%s"' % name
+            return
+
     def _download_folder(self, drive_file, local_file):
 
         files = self._list_files(drive_file)
-
-        # TODO: Need to create folder for downloading files
+        print "PATH", local_file.path
+        local_file.path = local_file.path / Path(drive_file['title'])
+        if not local_file.path.exists():
+            local_file.path.mkdir()
 
         for f in files:
             print f['title']
@@ -183,7 +182,7 @@ class DriveFile(DriveService):
             path += '/' + i
         return path
 
-    def update_file(service, file_id, path, new_revision):
+    def update(self, drive_file, local_file):
       '''
       Update an existing file's metadata and content.
 
@@ -195,22 +194,19 @@ class DriveFile(DriveService):
       Returns:
         Updated file metadata if successful, None otherwise.
       '''
-
-      root, name = os.path.split(path)
-
       try:
         # First retrieve the file from the API.
-        file = service.files().get(fileId=file_id).execute()
+        file = self.service.files().get(fileId=file_id).execute()
 
         # File's new metadata.
-        file['title'] = name
+        file['title'] = local_file.path
 
         # File's new content.
         media_body = MediaFileUpload(
             path, mimetype='', resumable=True)
 
         # Send the request to the API.
-        updated_file = service.files().update(
+        updated_file = self.service.files().update(
             fileId=file_id,
             body=file,
             newRevision=new_revision,
@@ -220,11 +216,12 @@ class DriveFile(DriveService):
         print 'An error occurred: %s' % error
         return None
 
-    def insert_property(service, file_id, key, value, visibility):
+    def add_property(self, drive_file, key, value):
       """
       Insert new custom file property.
 
       """
+      visibility = 'PUBLIC'
       body = {
         'key': key,
         'value': value,
@@ -242,7 +239,11 @@ class DriveFile(DriveService):
 class LocalFile(DriveService):
     def __init__(self, path):
         super(self.__class__, self).__init__()
-        self.path = Path(path)
+
+        if isinstance(path, str):
+            self.path = Path(path)
+        else:
+            self.path = path
 
     def _upload_file(self, path, parent_id):
 
@@ -287,17 +288,30 @@ class LocalFile(DriveService):
         if self.path.is_dir():
             self._upload_folder(parent_id)
         else:
-            self._upload_file(parent_id)
+            self._upload_file(self.path, parent_id)
+
+class File(object):
+    def __init__(self, drive_file, local_file):
+        self.drive_file = drive_file
+        self.local_file = local_file
+
+    def upload(self):
+        print 'Upload file here'
 
 if __name__ == '__main__':
-    drive_util = DriveUtils()
-    cp_test_dir = drive_util.get_file('CpTestProject')
-    seq_drive_file = drive_util.get_file('SQ04_SH14_06_RIS.0001.exr')
+
+    local_file = LocalFile('G:/Code/kk_drive/Project/Scene/SQ05/SH16/nuke/SQ05_Sh16_01.nk')
+    drive_file = DriveFile('My Drive/CpTestProject/shots/SQ05_SH16/scenes/nuke/SQ05_Sh16_01.nk')
 
 
-    my_drive_file = DriveFile(drive_util.get_file('test_seq')['id'])
-    download_dir = LocalFile('C:/Users/curpigeon/Desktop/kk_drive')
-    my_drive_file.download(download_dir)
+    # drive_util = DriveUtils()
+    # cp_test_dir = drive_util.get_file('CpTestProject')
+    # seq_drive_file = drive_util.get_file('SQ04_SH14_06_RIS.0001.exr')
+    #
+    #
+    # my_drive_file = DriveFile(drive_util.get_file('CpTestProject')['id'])
+    # download_dir = LocalFile('')
+    # my_drive_file.download(download_dir)
 
     # test_file = LocalFile('C:/Users/curpigeon/Desktop/kk_drive/test_seq')
     # test_file.upload(cp_test_dir['id'])
