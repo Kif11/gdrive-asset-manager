@@ -1,6 +1,10 @@
+import sys
+import os
+
+sys.path.insert(1, '/Users/amy/Desktop/kk_drive/venv/Lib/site-packages')
+
 import httplib2
 import urllib
-import os
 import io
 
 from apiclient import discovery
@@ -15,7 +19,6 @@ from pprint import pprint
 from progressbar import ProgressBar
 import simplejson
 from pathlib import Path
-
 
 class DriveService(object):
     def __init__(self):
@@ -78,6 +81,10 @@ class DriveService(object):
         return service
 
 class DriveFile(DriveService):
+    """
+    Class define drive file and all actions associated with it.
+    """
+
     def __init__(self, id):
         super(self.__class__, self).__init__()
         self.id = id
@@ -119,10 +126,11 @@ class DriveFile(DriveService):
               return
 
     def file_in_folder(self, name, parent_id):
-        '''
-        Find latest file that match the name. Not looking in trashed
-        '''
-        files = self.service.files().list(q="title = '%s' and trashed = false and '%s' in parents" % (name, parent_id)).execute()['items']
+        """
+        Find a file in specified directory that match the name. Thresh folder is skiped.
+        """
+        files = self.service.files().list(q="title = '%s' and trashed = false and '%s' in parents"
+                                            % (name, parent_id)).execute()['items']
 
         if files:
             if len(files) == 1:
@@ -182,39 +190,55 @@ class DriveFile(DriveService):
             path += '/' + i
         return path
 
-    def update(self, drive_file, local_file):
-      '''
-      Update an existing file's metadata and content.
+    def update(self, local_file):
+        """
+        Update an existing file's metadata and content.
 
-      Args:
-        service: Drive API service instance.
-        file_id: ID of the file to update.
-        path: Filename of the new content to upload.
-        new_revision: Whether or not to create a new revision for this file.
-      Returns:
+        Returns:
         Updated file metadata if successful, None otherwise.
-      '''
-      try:
+        """
+        # try:
         # First retrieve the file from the API.
-        file = self.service.files().get(fileId=file_id).execute()
+        dfile = self.service.files().get(fileId=self.id).execute()
 
         # File's new metadata.
-        file['title'] = local_file.path
+        dfile['title'] = str(local_file.path.name)
 
         # File's new content.
         media_body = MediaFileUpload(
-            path, mimetype='', resumable=True)
+            str(local_file.path), mimetype='', resumable=True)
 
-        # Send the request to the API.
-        updated_file = self.service.files().update(
-            fileId=file_id,
-            body=file,
-            newRevision=new_revision,
-            media_body=media_body).execute()
-        return updated_file
-      except errors.HttpError, error:
-        print 'An error occurred: %s' % error
-        return None
+        try:
+          request = self.service.files().update(fileId=self.id,
+                                                body=dfile,
+                                                newRevision=True,
+                                                media_body=media_body)
+          response = None
+          # Create a progress bar object
+          pbar = ProgressBar(maxval=100).start()
+          while response is None:
+            status, response = request.next_chunk()
+            if status:
+              # Update progress bar
+              pbar.update(int(status.progress() * 100))
+          print "Upload Complete!"
+          return request.execute()
+        except errors.HttpError, error:
+          print 'An error occured: %s' % error
+          return None
+
+
+    #     # Send the request to the API.
+    #     updated_file = self.service.files().update(
+    #         fileId=self.id,
+    #         body=dfile,
+    #         newRevision=True,
+    #         media_body=media_body).execute()
+    #     print 'File updated successfuly!'
+    #     return updated_file
+    #   except errors.HttpError, error:
+    #     print 'An error occurred: %s' % error
+    #     return None
 
     def add_property(self, drive_file, key, value):
       """
@@ -300,12 +324,11 @@ class File(object):
 
 if __name__ == '__main__':
 
-    local_file = LocalFile('G:/Code/kk_drive/Project/Scene/SQ05/SH16/nuke/SQ05_Sh16_01.nk')
-    drive_file = DriveFile('My Drive/CpTestProject/shots/SQ05_SH16/scenes/nuke/SQ05_Sh16_01.nk')
+    # local_file = LocalFile('G:/Code/kk_drive/Project/Scene/SQ05/SH16/nuke/SQ05_Sh16_01.nk')
+    # drive_file = DriveFile('My Drive/CpTestProject/shots/SQ05_SH16/scenes/nuke/SQ05_Sh16_01.nk')
 
 
     # drive_util = DriveUtils()
-    # cp_test_dir = drive_util.get_file('CpTestProject')
     # seq_drive_file = drive_util.get_file('SQ04_SH14_06_RIS.0001.exr')
     #
     #
@@ -313,5 +336,49 @@ if __name__ == '__main__':
     # download_dir = LocalFile('')
     # my_drive_file.download(download_dir)
 
-    # test_file = LocalFile('C:/Users/curpigeon/Desktop/kk_drive/test_seq')
-    # test_file.upload(cp_test_dir['id'])
+    assets = [
+
+    {"name":"paperBird",
+        "tasks": [{
+            "name": "rig",
+            "driveFiles": [{
+                        "name": "TBK_Rig_PaperBird_test.ma",
+                        "id": "0By7scHVmOMWFYnpyd2VyakxzUm8",
+                        "type": "maya"
+                          }]
+            },
+            {"name": "texture",
+            "driveFiles": []
+            }]
+        }]
+
+    shots = [
+    {
+        "sequence": 1,
+        "code": "SQ01_SH010",
+        "tasks": {
+            "anim": {
+            },
+            "render": {
+            }
+        }
+    },
+    {
+        "sequence": 1,
+        "code": "SQ01_SH011",
+        "tasks": {}
+    }
+]
+
+    # test_file = LocalFile('/Users/amy/Desktop/kk_drive/SQ02_SH010_testFile.ma')
+    # test_file.upload('0By7scHVmOMWFLVVIenVoUVhCWnM')
+    # drive_file = DriveFile('0By7scHVmOMWFcVQ3bTlHNGZkWFk')
+    # drive_file.update(test_file)
+
+    for asset in assets:
+        print 'Name: ', asset['name']
+        for task in asset['tasks']:
+            print 'Task: ', task['name']
+            for f in task['driveFiles']:
+                print 'File: ', f['name']
+                print 'FileId: ', f['id']
