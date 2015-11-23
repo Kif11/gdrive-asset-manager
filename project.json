@@ -1,0 +1,36 @@
+[
+    {
+        "dependencies": [
+            {
+                "id": "0BwMm4qt-n8D_enIzWS1SUjlnYzA",
+                "name": "TBK_Rig_PaperBird.ma",
+                "version": 9
+            }
+        ],
+        "files": [
+            {
+                "id": "0B9yAgxKfBUjWaTVVbDlRcnFHN28",
+                "name": "SQ02_SH010_anim.ma",
+                "version": 2
+            }
+        ],
+        "name": "SQ02_SH010"
+    },
+    {
+        "dependencies": [
+            {
+                "id": "0BwMm4qt-n8D_enIzWS1SUjlnYzA",
+                "name": "TBK_Rig_PaperBird.ma",
+                "version": 9
+            }
+        ],
+        "files": [
+            {
+                "id": "0B9yAgxKfBUjWUDdWYUpQWjZEdVk",
+                "name": "SQ01_SH010_anim.ma",
+                "version": 5
+            }
+        ],
+        "name": "SQ01_SH010"
+    }
+]
