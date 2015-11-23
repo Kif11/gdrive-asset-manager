@@ -1,7 +1,7 @@
 import sys
 import os
 
-sys.path.insert(1, '/Users/amy/Desktop/kk_drive/venv/Lib/site-packages')
+sys.path.insert(1, os.path.join(os.getcwd(), 'venv/Lib/site-packages'))
 
 import httplib2
 import urllib
@@ -164,7 +164,7 @@ class DriveFile(DriveService):
         if self.file['mimeType'] == folder_type:
             self._download_folder(self.file, local_file)
         else:
-            self.download_file(self.file, local_file)
+            self._download_file(self.file, local_file)
 
     def get_path(self):
 
@@ -172,15 +172,15 @@ class DriveFile(DriveService):
         Construct a path to a drive file recursively asking for file parent
         '''
         # def parent_title(service, file, path_items=[])
-        parent = file['parents'][0]
-        parent_file = service.files().get(fileId=parent['id']).execute()
+        parent = self.file['parents'][0]
+        parent_file = self.service.files().get(fileId=parent['id']).execute()
         title = parent_file['title']
 
         path_items = []
         while title != 'My Drive':
             path_items.append(title)
             parent = parent_file['parents'][0]
-            parent_file = service.files().get(fileId=parent['id']).execute()
+            parent_file = self.service.files().get(fileId=parent['id']).execute()
             title = parent_file['title']
 
         path_items.reverse()
@@ -188,7 +188,7 @@ class DriveFile(DriveService):
         path = '/My Drive'
         for i in path_items:
             path += '/' + i
-        return path
+        return Path(path)
 
     def update(self, local_file):
         """
@@ -323,6 +323,11 @@ class File(object):
         print 'Upload file here'
 
 if __name__ == '__main__':
+    my_drive_file = DriveFile('0B9yAgxKfBUjWaTVVbDlRcnFHN28')
+    print(my_drive_file.get_path())
+    # download_dir = LocalFile('C:/Users/kkirill2/Desktop')
+    # my_drive_file.download(download_dir)
+
 
     # local_file = LocalFile('G:/Code/kk_drive/Project/Scene/SQ05/SH16/nuke/SQ05_Sh16_01.nk')
     # drive_file = DriveFile('My Drive/CpTestProject/shots/SQ05_SH16/scenes/nuke/SQ05_Sh16_01.nk')
@@ -336,49 +341,50 @@ if __name__ == '__main__':
     # download_dir = LocalFile('')
     # my_drive_file.download(download_dir)
 
-    assets = [
+#     assets = [
 
-    {"name":"paperBird",
-        "tasks": [{
-            "name": "rig",
-            "driveFiles": [{
-                        "name": "TBK_Rig_PaperBird_test.ma",
-                        "id": "0By7scHVmOMWFYnpyd2VyakxzUm8",
-                        "type": "maya"
-                          }]
-            },
-            {"name": "texture",
-            "driveFiles": []
-            }]
-        }]
+#     {"name":"paperBird",
+#         "tasks": [{
+#             "name": "rig",
+#             "driveFiles": [{
+#                         "name": "TBK_Rig_PaperBird_test.ma",
+#                         "id": "0By7scHVmOMWFYnpyd2VyakxzUm8",
+#                         "type": "maya"
+#                           }]
+#             },
+#             {"name": "texture",
+#             "driveFiles": []
+#             }]
+#         }]
 
-    shots = [
-    {
-        "sequence": 1,
-        "code": "SQ01_SH010",
-        "tasks": {
-            "anim": {
-            },
-            "render": {
-            }
-        }
-    },
-    {
-        "sequence": 1,
-        "code": "SQ01_SH011",
-        "tasks": {}
-    }
-]
+#     shots = [
+#     {
+#         "sequence": 1,
+#         "code": "SQ01_SH010",
+#         "tasks": {
+#             "anim": {
+#             },
+#             "render": {
+#             }
+#         }
+#     },
+#     {
+#         "sequence": 1,
+#         "code": "SQ01_SH011",
+#         "tasks": {}
+#     }
+# ]
 
     # test_file = LocalFile('/Users/amy/Desktop/kk_drive/SQ02_SH010_testFile.ma')
     # test_file.upload('0By7scHVmOMWFLVVIenVoUVhCWnM')
     # drive_file = DriveFile('0By7scHVmOMWFcVQ3bTlHNGZkWFk')
     # drive_file.update(test_file)
 
-    for asset in assets:
-        print 'Name: ', asset['name']
-        for task in asset['tasks']:
-            print 'Task: ', task['name']
-            for f in task['driveFiles']:
-                print 'File: ', f['name']
-                print 'FileId: ', f['id']
+    # for asset in assets:
+    #     print 'Name: ', asset['name']
+    #     for task in asset['tasks']:
+    #         print 'Task: ', task['name']
+    #         for f in task['driveFiles']:
+    #             print 'File: ', f['name']
+    #             print 'FileId: ', f['id']
+
