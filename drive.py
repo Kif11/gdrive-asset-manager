@@ -105,7 +105,7 @@ class DriveFile(DriveService):
         return files
 
     def _download_file(self, drive_file, local_file):
-        local_path = local_file.path / Path(drive_file['title'])
+        local_path = local_file.path
         request = self.service.files().get_media(fileId=drive_file['id'])
         fh = io.FileIO(str(local_path), mode='wb')
         media_request = apiclient.http.MediaIoBaseDownload(fh, request)
@@ -124,6 +124,18 @@ class DriveFile(DriveService):
             if done:
               print 'Download Complete'
               return
+
+    def revisions(self):
+          """Retrieve a list of revisions.
+          Returns:
+            List of revisions.
+          """
+          try:
+            revisions = self.service.revisions().list(fileId=self.id).execute()
+            return revisions.get('items', [])
+          except errors.HttpError, error:
+            print 'An error occurred: %s' % error
+          return None
 
     def file_in_folder(self, name, parent_id):
         """
@@ -156,6 +168,12 @@ class DriveFile(DriveService):
 
         print 'All files are downloaded'
         return files
+
+    def name(self):
+        return Path(self.file['title'])
+
+    def version(self):
+        return len(self.revisions())
 
     def download(self, local_file):
 
