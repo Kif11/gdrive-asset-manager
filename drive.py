@@ -15,10 +15,11 @@ from oauth2client import client
 from oauth2client import tools
 from apiclient.http import MediaFileUpload
 
-from pprint import pprint
 from progressbar import ProgressBar
 import simplejson
 from pathlib import Path
+
+from mongodb import MongoFile
 
 class DriveService(object):
     def __init__(self):
@@ -26,12 +27,6 @@ class DriveService(object):
         self.SCOPES = 'https://www.googleapis.com/auth/drive'
         self.CLIENT_SECRET_FILE = 'client_secrets.json'
         self.TOKEN_FILE = 'token.json'
-
-        try:
-            import argparse
-            self.flags = argparse.ArgumentParser(parents=[tools.argparser]).parse_args()
-        except ImportError:
-            self.flags = None
 
         self.service = self.authenticate()
 
@@ -85,10 +80,73 @@ class DriveFile(DriveService):
     Class define drive file and all actions associated with it.
     """
 
-    def __init__(self, id):
+    def __init__(self, drive_id=None):
         super(self.__class__, self).__init__()
-        self.id = id
-        self.file = self._file()
+        if drive_id is not None:
+            self.id = drive_id
+            self.file = self._file()
+        self.mfile = MongoFile()
+
+    @property
+    def name(self):
+        return self.file['title']
+
+    @property
+    def version(self):
+        return len(self.revisions())
+
+    @property
+    def properties(self):
+        props = {}
+        if 'properties' in self.file:
+            for p in self.file['properties']:
+                props[p['key']] = p['value']
+        else:
+            print 'File %s does not have any custom properties.' % self.name
+        return props
+
+    def metadata(self):
+        """
+        Retrive metadate for the current drive file.
+        If not previously linked then link Drive file with Mongo Lab database.
+        returns: JSON file metadata object.
+        """
+        file_data = {
+            'name': self.name,
+            'drive_id': self.id,
+            'version': self.version,
+            'dependencies': []
+        }
+
+        # If Drive file have mongo id propertie
+        if 'mongo_id' in self.properties.keys():
+            mongo_id = self.properties['mongo_id']
+            self.mfile = MongoFile(mongo_id)
+            if self.mfile.data is None:
+                print 'Drive property exist but no Mongo metadata found.'
+                print 'Creating new metadata...'
+                self.delete_property('mongo_id')
+                mongo_id = self.mfile.new(file_data)
+                self.add_property('mongo_id', mongo_id)
+            else:
+                # Metadata already exists.
+                pass
+        else:
+            # If metadate created first time for this file.
+            print 'Creating new metadata...'
+            mongo_id = self.mfile.new(file_data)
+            self.add_property('mongo_id', mongo_id)
+
+        self.mfile = MongoFile(mongo_id)
+
+        return self.mfile.data
+
+    def add_dependencies(self, drive_ids=[]):
+        for d_id in drive_ids:
+            dfile = DriveFile(d_id)
+            self.mfile.data['dependencies'].append({'name': dfile.name,
+                                                    'drive_id': d_id})
+        self.mfile.update()
 
     def _file(self):
         return self.service.files().get(fileId=self.id).execute()
@@ -98,19 +156,23 @@ class DriveFile(DriveService):
         parent = self.service.files().get(fileId=parent_id).execute()
         return parent
 
-    def _list_files(self, drive_file):
+    def _list_files(self):
         files = self.service.files().list(
-                q="'%s' in parents and trashed = false" % drive_file['id']
+                q="'%s' in parents and trashed = false" % self.file['id']
                 ).execute()['items']
         return files
 
     def _download_file(self, drive_file, local_file):
-        local_path = local_file.path
+        if local_file.path.is_dir():
+            local_path = local_file.path / self.name()
+        else:
+            local_path = local_file.path
+
         request = self.service.files().get_media(fileId=drive_file['id'])
         fh = io.FileIO(str(local_path), mode='wb')
         media_request = apiclient.http.MediaIoBaseDownload(fh, request)
 
-        print 'Downloading %s' % local_path
+        print 'Downloading %s version %s' % (local_path, self.version())
 
         pbar = ProgressBar(maxval=100).start()
         while True:
@@ -124,6 +186,30 @@ class DriveFile(DriveService):
             if done:
               print 'Download Complete'
               return
+
+    def _download_folder(self, drive_file, local_file):
+
+        files = self._list_files(drive_file)
+        print "PATH", local_file.path
+        local_file.path = local_file.path / Path(drive_file['title'])
+        if not local_file.path.exists():
+            local_file.path.mkdir()
+
+        for f in files:
+            print f['title']
+            self._download_file(f, local_file)
+
+        print 'All files are downloaded'
+        return files
+
+    def download(self, local_file):
+
+        folder_type = 'application/vnd.google-apps.folder'
+
+        if self.file['mimeType'] == folder_type:
+            self._download_folder(self.file, local_file)
+        else:
+            self._download_file(self.file, local_file)
 
     def revisions(self):
           """Retrieve a list of revisions.
@@ -154,36 +240,6 @@ class DriveFile(DriveService):
             print 'Nothing found matching "%s"' % name
             return
 
-    def _download_folder(self, drive_file, local_file):
-
-        files = self._list_files(drive_file)
-        print "PATH", local_file.path
-        local_file.path = local_file.path / Path(drive_file['title'])
-        if not local_file.path.exists():
-            local_file.path.mkdir()
-
-        for f in files:
-            print f['title']
-            self._download_file(f, local_file)
-
-        print 'All files are downloaded'
-        return files
-
-    def name(self):
-        return Path(self.file['title'])
-
-    def version(self):
-        return len(self.revisions())
-
-    def download(self, local_file):
-
-        folder_type = 'application/vnd.google-apps.folder'
-
-        if self.file['mimeType'] == folder_type:
-            self._download_folder(self.file, local_file)
-        else:
-            self._download_file(self.file, local_file)
-
     def get_path(self):
 
         '''
@@ -210,10 +266,10 @@ class DriveFile(DriveService):
 
     def update(self, local_file):
         """
-        Update an existing file's metadata and content.
+        Create new revision of the drive file.
 
         Returns:
-        Updated file metadata if successful, None otherwise.
+        Updated file if successful, None otherwise.
         """
         # try:
         # First retrieve the file from the API.
@@ -245,20 +301,7 @@ class DriveFile(DriveService):
           print 'An error occured: %s' % error
           return None
 
-
-    #     # Send the request to the API.
-    #     updated_file = self.service.files().update(
-    #         fileId=self.id,
-    #         body=dfile,
-    #         newRevision=True,
-    #         media_body=media_body).execute()
-    #     print 'File updated successfuly!'
-    #     return updated_file
-    #   except errors.HttpError, error:
-    #     print 'An error occurred: %s' % error
-    #     return None
-
-    def add_property(self, drive_file, key, value):
+    def add_property(self, key, value):
       """
       Insert new custom file property.
 
@@ -271,12 +314,23 @@ class DriveFile(DriveService):
       }
 
       try:
-        p = service.properties().insert(
-            fileId=file_id, body=body).execute()
+        p = self.service.properties().insert(
+            fileId=self.id, body=body).execute()
         return p
       except errors.HttpError, error:
         print 'An error occurred: %s' % error
       return None
+
+    def delete_property(self, name):
+      self.service.properties().delete(fileId=self.id, propertyKey=name,
+                                    visibility = 'PUBLIC').execute()
+
+    def find_file(self, name):
+        dfiles = self.service.files().list(
+        q="title='%s' and trashed = false" % name).execute()['items']
+        print len(dfiles), 'files found'
+        return DriveFile(dfiles[0]['id'])
+
 
 class LocalFile(DriveService):
     def __init__(self, path):
@@ -332,77 +386,14 @@ class LocalFile(DriveService):
         else:
             self._upload_file(self.path, parent_id)
 
-class File(object):
-    def __init__(self, drive_file, local_file):
-        self.drive_file = drive_file
-        self.local_file = local_file
-
-    def upload(self):
-        print 'Upload file here'
 
 if __name__ == '__main__':
-    my_drive_file = DriveFile('0B9yAgxKfBUjWaTVVbDlRcnFHN28')
-    print(my_drive_file.get_path())
-    # download_dir = LocalFile('C:/Users/kkirill2/Desktop')
-    # my_drive_file.download(download_dir)
-
-
-    # local_file = LocalFile('G:/Code/kk_drive/Project/Scene/SQ05/SH16/nuke/SQ05_Sh16_01.nk')
-    # drive_file = DriveFile('My Drive/CpTestProject/shots/SQ05_SH16/scenes/nuke/SQ05_Sh16_01.nk')
-
-
-    # drive_util = DriveUtils()
-    # seq_drive_file = drive_util.get_file('SQ04_SH14_06_RIS.0001.exr')
-    #
-    #
-    # my_drive_file = DriveFile(drive_util.get_file('CpTestProject')['id'])
-    # download_dir = LocalFile('')
-    # my_drive_file.download(download_dir)
-
-#     assets = [
-
-#     {"name":"paperBird",
-#         "tasks": [{
-#             "name": "rig",
-#             "driveFiles": [{
-#                         "name": "TBK_Rig_PaperBird_test.ma",
-#                         "id": "0By7scHVmOMWFYnpyd2VyakxzUm8",
-#                         "type": "maya"
-#                           }]
-#             },
-#             {"name": "texture",
-#             "driveFiles": []
-#             }]
-#         }]
-
-#     shots = [
-#     {
-#         "sequence": 1,
-#         "code": "SQ01_SH010",
-#         "tasks": {
-#             "anim": {
-#             },
-#             "render": {
-#             }
-#         }
-#     },
-#     {
-#         "sequence": 1,
-#         "code": "SQ01_SH011",
-#         "tasks": {}
-#     }
-# ]
-
-    # test_file = LocalFile('/Users/amy/Desktop/kk_drive/SQ02_SH010_testFile.ma')
-    # test_file.upload('0By7scHVmOMWFLVVIenVoUVhCWnM')
-    # drive_file = DriveFile('0By7scHVmOMWFcVQ3bTlHNGZkWFk')
-    # drive_file.update(test_file)
-
-    # for asset in assets:
-    #     print 'Name: ', asset['name']
-    #     for task in asset['tasks']:
-    #         print 'Task: ', task['name']
-    #         for f in task['driveFiles']:
-    #             print 'File: ', f['name']
-    #             print 'FileId: ', f['id']
-
+    dfile = DriveFile('0By7scHVmOMWFbU9YZmNybE5ibkU')
+    texture_folder = DriveFile('0B8agTDPfhZBTRzRmWWFxOTg1dEU')
+    textures = texture_folder._list_files()
+    t_ids = []
+    for t in textures:
+        t_ids.append(t['id'])
+    print t_ids
+    dfile.metadata()
+    dfile.add_dependencies(t_ids)
