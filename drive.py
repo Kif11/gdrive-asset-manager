@@ -20,6 +20,9 @@ import simplejson
 from pathlib import Path
 
 from mongodb import MongoFile
+from logger import Logger
+
+log = Logger()
 
 class DriveService(object):
     def __init__(self):
@@ -55,12 +58,13 @@ class DriveService(object):
 
         # If faled to retrive token from file create a new one
         if not credentials or credentials.invalid:
-            flow = client.flow_from_clientsecrets(os.path.join(credential_dir, self.CLIENT_SECRET_FILE), self.SCOPES)
+            flow = client.flow_from_clientsecrets(os.path.join(credential_dir,
+                                        self.CLIENT_SECRET_FILE), self.SCOPES)
             if self.flags:
                 credentials = tools.run_flow(flow, store, self.flags)
             else: # Needed only for compatability with Python 2.6
                 credentials = tools.run(flow, store)
-            print 'Storing credentials to ' + credential_path
+            log.info('Storing credentials to %s' % credential_path)
 
         return credentials
 
@@ -102,7 +106,7 @@ class DriveFile(DriveService):
             for p in self.file['properties']:
                 props[p['key']] = p['value']
         else:
-            print 'File %s does not have any custom properties.' % self.name
+            log.info('File %s does not have any custom properties.' % self.name)
         return props
 
     def metadata(self):
@@ -123,8 +127,8 @@ class DriveFile(DriveService):
             mongo_id = self.properties['mongo_id']
             self.mfile = MongoFile(mongo_id)
             if self.mfile.data is None:
-                print 'Drive property exist but no Mongo metadata found.'
-                print 'Creating new metadata...'
+                log.info('Drive property exist but no Mongo metadata found.')
+                log.info('Creating new metadata...')
                 self.delete_property('mongo_id')
                 mongo_id = self.mfile.new(file_data)
                 self.add_property('mongo_id', mongo_id)
@@ -133,7 +137,7 @@ class DriveFile(DriveService):
                 pass
         else:
             # If metadate created first time for this file.
-            print 'Creating new metadata...'
+            log.info('Creating new metadata...')
             mongo_id = self.mfile.new(file_data)
             self.add_property('mongo_id', mongo_id)
 
@@ -163,43 +167,42 @@ class DriveFile(DriveService):
         return files
 
     def _download_file(self, drive_file, local_file):
-        if local_file.path.is_dir():
-            local_path = local_file.path / self.name()
-        else:
-            local_path = local_file.path
 
-        request = self.service.files().get_media(fileId=drive_file['id'])
+        if local_file.path.is_dir():
+            local_path = local_file.path / self.name
+        request = self.service.files().get_media(fileId=self.id)
         fh = io.FileIO(str(local_path), mode='wb')
         media_request = apiclient.http.MediaIoBaseDownload(fh, request)
-
-        print 'Downloading %s version %s' % (local_path, self.version())
-
         pbar = ProgressBar(maxval=100).start()
+
+        log.info('Downloading %s version %s' % (local_path / self.name,
+                                                self.version))
+
         while True:
             try:
               download_progress, done = media_request.next_chunk()
             except errors.HttpError, error:
-              print 'An error occurred: %s' % error
+              log.error('An error occurred: %s' % error)
               return
             if download_progress:
                 pbar.update(int(download_progress.progress() * 100))
             if done:
-              print 'Download Complete'
-              return
+                log.info('\n%s downloaded.' % self.name)
+                return
 
     def _download_folder(self, drive_file, local_file):
 
         files = self._list_files(drive_file)
-        print "PATH", local_file.path
+        log.debug("DOWLOADING TO PATH: %s" % local_file.path)
         local_file.path = local_file.path / Path(drive_file['title'])
         if not local_file.path.exists():
             local_file.path.mkdir()
 
         for f in files:
-            print f['title']
+            log.info(f['title'])
             self._download_file(f, local_file)
 
-        print 'All files are downloaded'
+        log.info('All files are downloaded')
         return files
 
     def download(self, local_file):
@@ -220,24 +223,25 @@ class DriveFile(DriveService):
             revisions = self.service.revisions().list(fileId=self.id).execute()
             return revisions.get('items', [])
           except errors.HttpError, error:
-            print 'An error occurred: %s' % error
+            log.info('An error occurred: %s' % error)
           return None
 
     def file_in_folder(self, name, parent_id):
         """
         Find a file in specified directory that match the name. Thresh folder is skiped.
         """
-        files = self.service.files().list(q="title = '%s' and trashed = false and '%s' in parents"
-                                            % (name, parent_id)).execute()['items']
+        query = "title = '%s' and trashed = false and '%s' in parents" \
+                                                        % (name, parent_id)
+        files = self.service.files().list(q=query).execute()['items']
 
         if files:
             if len(files) == 1:
                 return files[0]
             else:
-                print '%d files have "%s" name' % (len(files), name)
+                log.info('%d files have "%s" name' % (len(files), name))
                 return
         else:
-            print 'Nothing found matching "%s"' % name
+            log.info('Nothing found matching "%s"' % name)
             return
 
     def get_path(self):
@@ -271,17 +275,13 @@ class DriveFile(DriveService):
         Returns:
         Updated file if successful, None otherwise.
         """
-        # try:
         # First retrieve the file from the API.
         dfile = self.service.files().get(fileId=self.id).execute()
-
         # File's new metadata.
         dfile['title'] = str(local_file.path.name)
-
         # File's new content.
         media_body = MediaFileUpload(
             str(local_file.path), mimetype='', resumable=True)
-
         try:
           request = self.service.files().update(fileId=self.id,
                                                 body=dfile,
@@ -295,16 +295,15 @@ class DriveFile(DriveService):
             if status:
               # Update progress bar
               pbar.update(int(status.progress() * 100))
-          print "Upload Complete!"
+          log.info("Upload Completed!")
           return request.execute()
         except errors.HttpError, error:
-          print 'An error occured: %s' % error
+          log.error('An error occured: %s' % error)
           return None
 
     def add_property(self, key, value):
       """
       Insert new custom file property.
-
       """
       visibility = 'PUBLIC'
       body = {
@@ -318,7 +317,7 @@ class DriveFile(DriveService):
             fileId=self.id, body=body).execute()
         return p
       except errors.HttpError, error:
-        print 'An error occurred: %s' % error
+        log.error('An error occurred: %s' % error)
       return None
 
     def delete_property(self, name):
@@ -328,18 +327,48 @@ class DriveFile(DriveService):
     def find_file(self, name):
         dfiles = self.service.files().list(
         q="title='%s' and trashed = false" % name).execute()['items']
-        print len(dfiles), 'files found'
+        log.info(len(dfiles), 'files found')
         return DriveFile(dfiles[0]['id'])
+
+    def download_bundle(self, local_file):
+        """
+        Download file with all dependencies.
+        """
+        self.download(local_file)
+        self.metadata()
+        for d in self.mfile.data['dependencies']:
+            dfile = DriveFile(d['drive_id'])
+            dfile.download(local_file)
 
 
 class LocalFile(DriveService):
     def __init__(self, path):
         super(self.__class__, self).__init__()
+        self.__path = self._set_path(path)
 
-        if isinstance(path, str):
-            self.path = Path(path)
+    @property
+    def path(self):
+        return self.__path
+
+    def _set_path(self, p):
+        # Make sure that path is pathlib
+        # object and not a string.
+        if isinstance(p, str):
+            p = Path(p)
+
+        if p.name.find('.') != -1:
+            log.debug("LocalFile is probably a file")
+            if not p.parent.exists():
+                p.parent.mkdir()
         else:
-            self.path = path
+            # The local file is a directory
+            if not p.exists():
+                log.info('Creating new directory %s' % p)
+                p.mkdir()
+            else:
+                log.info('Directory %s already exists' % p)
+
+        return p
 
     def _upload_file(self, path, parent_id):
 
@@ -360,10 +389,10 @@ class LocalFile(DriveService):
             if status:
               # Update progress bar
               pbar.update(int(status.progress() * 100))
-          print "Upload Complete!"
+          log.info("Upload Complete!")
           return request.execute()
         except errors.HttpError, error:
-          print 'An error occured: %s' % error
+          log.error('An error occured: %s' % error)
           return None
 
     def _upload_folder(self, parent_id):
@@ -389,11 +418,5 @@ class LocalFile(DriveService):
 
 if __name__ == '__main__':
     dfile = DriveFile('0By7scHVmOMWFbU9YZmNybE5ibkU')
-    texture_folder = DriveFile('0B8agTDPfhZBTRzRmWWFxOTg1dEU')
-    textures = texture_folder._list_files()
-    t_ids = []
-    for t in textures:
-        t_ids.append(t['id'])
-    print t_ids
-    dfile.metadata()
-    dfile.add_dependencies(t_ids)
+    test_folder = LocalFile('/Users/amy/Desktop/DTest')
+    dfile.download_bundle(test_folder)
