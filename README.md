@@ -1,4 +1,4 @@
-# kk_drive
-Prototype of a tool that explore an idea of distributed pipeline.
-This set of scripts utilize Shotgun API in conjunction with Google Drive API for file storage.
-All project and file metadata stored on Shotgun when all binary data uploaded to Drive.
+# Google Drive Asset Manager
+Tools that leverage Google technology for storing and sharing production assets and their dependencies. This allows artists to work in a distributed fashion from their homes.
+This set of scripts utilize Mongo Lab in conjunction with Google Drive API for file storage.
+All project and file metadata stored in Mongo database whereas all binary data uploaded to Google Drive.
